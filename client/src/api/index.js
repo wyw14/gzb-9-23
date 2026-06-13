@@ -41,3 +41,15 @@ export function createExchange(myItemId, targetItemId) {
 export function getMyExchanges(userId) {
   return api.get('/exchanges/my', { params: { userId } }).then(res => res.data)
 }
+
+export function getBlocks(userId) {
+  return api.get('/blocks', { params: { userId } }).then(res => res.data)
+}
+
+export function blockUser(userId, blockedUserId, blockedUserName) {
+  return api.post('/blocks', { userId, blockedUserId, blockedUserName }).then(res => res.data)
+}
+
+export function unblockUser(userId, blockedUserId) {
+  return api.delete(`/blocks/${blockedUserId}`, { params: { userId } }).then(res => res.data)
+}

@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
-const { readItems, writeItems, readExchanges, writeExchanges } = require('./storage');
+const { readItems, writeItems, readExchanges, writeExchanges, readBlocks, writeBlocks } = require('./storage');
 
 const app = express();
 const PORT = 3455;
@@ -83,6 +83,15 @@ app.get('/api/items', (req, res) => {
 
   if (userId) {
     items = items.filter(item => item.ownerId !== userId);
+
+    const blocks = readBlocks();
+    const blockedUserIds = blocks
+      .filter(b => b.userId === userId)
+      .map(b => b.blockedUserId);
+
+    if (blockedUserIds.length > 0) {
+      items = items.filter(item => !blockedUserIds.includes(item.ownerId));
+    }
   }
 
   const publicItems = items.map(item => ({
@@ -173,6 +182,8 @@ app.get('/api/items/:id', (req, res) => {
     image: getPublicImage(item),
     createdAt: item.createdAt,
     status: item.status,
+    ownerId: item.ownerId,
+    ownerName: item.ownerName,
     revealInfo: false
   });
 });
@@ -350,6 +361,75 @@ app.delete('/api/items/:id', (req, res) => {
   writeItems(items);
 
   res.json({ message: '删除成功' });
+});
+
+app.get('/api/blocks', (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ error: '缺少用户ID' });
+  }
+
+  const blocks = readBlocks();
+  const myBlocks = blocks.filter(b => b.userId === userId);
+  res.json(myBlocks);
+});
+
+app.post('/api/blocks', (req, res) => {
+  const { userId, blockedUserId, blockedUserName } = req.body;
+
+  if (!userId || !blockedUserId) {
+    return res.status(400).json({ error: '缺少必要参数' });
+  }
+
+  if (userId === blockedUserId) {
+    return res.status(400).json({ error: '不能屏蔽自己' });
+  }
+
+  const blocks = readBlocks();
+
+  const existingBlock = blocks.find(
+    b => b.userId === userId && b.blockedUserId === blockedUserId
+  );
+
+  if (existingBlock) {
+    return res.status(400).json({ error: '该用户已被屏蔽' });
+  }
+
+  const newBlock = {
+    id: uuidv4(),
+    userId,
+    blockedUserId,
+    blockedUserName: blockedUserName || '匿名用户',
+    createdAt: new Date().toISOString()
+  };
+
+  blocks.push(newBlock);
+  writeBlocks(blocks);
+
+  res.status(201).json(newBlock);
+});
+
+app.delete('/api/blocks/:blockedUserId', (req, res) => {
+  const { blockedUserId } = req.params;
+  const { userId } = req.query;
+
+  if (!userId) {
+    return res.status(400).json({ error: '缺少用户ID' });
+  }
+
+  const blocks = readBlocks();
+  const blockIndex = blocks.findIndex(
+    b => b.userId === userId && b.blockedUserId === blockedUserId
+  );
+
+  if (blockIndex === -1) {
+    return res.status(404).json({ error: '屏蔽记录不存在' });
+  }
+
+  blocks.splice(blockIndex, 1);
+  writeBlocks(blocks);
+
+  res.json({ message: '取消屏蔽成功' });
 });
 
 app.get('/uploads/:filename', async (req, res) => {

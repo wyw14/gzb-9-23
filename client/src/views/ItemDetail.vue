@@ -56,7 +56,36 @@
 
         <div v-if="item.revealInfo && item.ownerName" style="margin-bottom:20px;">
           <h4 style="margin-bottom:8px;color:#666;">发布者</h4>
-          <p style="color:#444;">{{ item.ownerName }}</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <p style="color:#444;margin:0;">{{ item.ownerName }}</p>
+            <button
+              v-if="!isOwner && !isBlocked"
+              class="btn btn-secondary"
+              style="padding:4px 12px;font-size:12px;"
+              :disabled="blocking"
+              @click="handleBlock"
+            >
+              {{ blocking ? '屏蔽中...' : '屏蔽该发布者' }}
+            </button>
+            <span v-else-if="isBlocked" style="color:#e74c3c;font-size:12px;">已屏蔽</span>
+          </div>
+        </div>
+
+        <div v-if="!item.revealInfo && !isOwner" style="margin-bottom:20px;">
+          <h4 style="margin-bottom:8px;color:#666;">发布者</h4>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <p style="color:#444;margin:0;">***（交换成功后显示）</p>
+            <button
+              v-if="!isBlocked"
+              class="btn btn-secondary"
+              style="padding:4px 12px;font-size:12px;"
+              :disabled="blocking"
+              @click="handleBlock"
+            >
+              {{ blocking ? '屏蔽中...' : '屏蔽该发布者' }}
+            </button>
+            <span v-else style="color:#e74c3c;font-size:12px;">已屏蔽</span>
+          </div>
         </div>
 
         <div v-if="item.revealInfo && item.contact" style="margin-bottom:20px;">
@@ -120,11 +149,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { getItemDetail, getMyItems, createExchange, appendAuth } from '../api/index.js'
+import { useRoute, useRouter } from 'vue-router'
+import { getItemDetail, getMyItems, createExchange, appendAuth, blockUser, getBlocks } from '../api/index.js'
 import { userStore } from '../store/user.js'
 
 const route = useRoute()
+const router = useRouter()
 
 const item = ref(null)
 const loading = ref(true)
@@ -132,6 +162,8 @@ const myItems = ref([])
 const myItemsLoading = ref(true)
 const selectedMyItemId = ref('')
 const exchanging = ref(false)
+const blocking = ref(false)
+const blockedUserIds = ref([])
 
 const categories = {
   book: '书籍类',
@@ -144,6 +176,10 @@ const categories = {
 
 const isOwner = computed(function() {
   return item.value && item.value.ownerId === userStore.user.id
+})
+
+const isBlocked = computed(function() {
+  return item.value && blockedUserIds.value.includes(item.value.ownerId)
 })
 
 const availableItems = computed(function() {
@@ -176,6 +212,42 @@ async function loadMyItems() {
   }
 }
 
+async function loadBlocks() {
+  try {
+    const blocks = await getBlocks(userStore.user.id)
+    blockedUserIds.value = blocks.map(b => b.blockedUserId)
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function handleBlock() {
+  if (!item.value) return
+
+  const ownerId = item.value.ownerId
+  const ownerName = item.value.ownerName || '匿名用户'
+
+  if (!ownerId) {
+    alert('无法获取发布者信息，请刷新页面后重试')
+    return
+  }
+
+  if (!confirm(`确定要屏蔽「${ownerName}」吗？屏蔽后，该用户发布的所有盲盒将不再出现在你的市场列表中。你可以在屏蔽名单管理中取消屏蔽。`)) {
+    return
+  }
+
+  blocking.value = true
+  try {
+    await blockUser(userStore.user.id, ownerId, ownerName)
+    alert(`已成功屏蔽「${ownerName}」，该用户的盲盒将不再出现在你的市场列表中。`)
+    blockedUserIds.value.push(ownerId)
+  } catch (e) {
+    alert('屏蔽失败：' + (e.response && e.response.data ? e.response.data.error : e.message))
+  } finally {
+    blocking.value = false
+  }
+}
+
 async function handleExchange() {
   if (!confirm('确定要交换吗？交换后双方的真实信息将互相公开。')) {
     return
@@ -195,5 +267,6 @@ async function handleExchange() {
 onMounted(function() {
   loadItem()
   loadMyItems()
+  loadBlocks()
 })
 </script>
