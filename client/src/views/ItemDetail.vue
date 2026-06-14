@@ -164,6 +164,7 @@ const selectedMyItemId = ref('')
 const exchanging = ref(false)
 const blocking = ref(false)
 const blockedUserIds = ref([])
+const blockedItemIds = ref([])
 
 const categories = {
   book: '书籍类',
@@ -179,7 +180,11 @@ const isOwner = computed(function() {
 })
 
 const isBlocked = computed(function() {
-  return item.value && blockedUserIds.value.includes(item.value.ownerId)
+  if (!item.value) return false
+  if (item.value.ownerId) {
+    return blockedUserIds.value.includes(item.value.ownerId)
+  }
+  return blockedItemIds.value.includes(item.value.id)
 })
 
 const availableItems = computed(function() {
@@ -224,23 +229,18 @@ async function loadBlocks() {
 async function handleBlock() {
   if (!item.value) return
 
-  const ownerId = item.value.ownerId
-  const ownerName = item.value.ownerName || '匿名用户'
-
-  if (!ownerId) {
-    alert('无法获取发布者信息，请刷新页面后重试')
-    return
-  }
-
-  if (!confirm(`确定要屏蔽「${ownerName}」吗？屏蔽后，该用户发布的所有盲盒将不再出现在你的市场列表中。你可以在屏蔽名单管理中取消屏蔽。`)) {
+  if (!confirm('确定要屏蔽该发布者吗？屏蔽后，该用户发布的所有盲盒将不再出现在你的市场列表中。你可以在屏蔽名单管理中取消屏蔽。')) {
     return
   }
 
   blocking.value = true
   try {
-    await blockUser(userStore.user.id, ownerId, ownerName)
-    alert(`已成功屏蔽「${ownerName}」，该用户的盲盒将不再出现在你的市场列表中。`)
-    blockedUserIds.value.push(ownerId)
+    const result = await blockUser(userStore.user.id, item.value.id)
+    if (result.blockedUserId) {
+      blockedUserIds.value.push(result.blockedUserId)
+    }
+    blockedItemIds.value.push(item.value.id)
+    alert(`已成功屏蔽「${result.blockedUserName || '该发布者'}」，该用户的盲盒将不再出现在你的市场列表中。`)
   } catch (e) {
     alert('屏蔽失败：' + (e.response && e.response.data ? e.response.data.error : e.message))
   } finally {

@@ -182,8 +182,6 @@ app.get('/api/items/:id', (req, res) => {
     image: getPublicImage(item),
     createdAt: item.createdAt,
     status: item.status,
-    ownerId: item.ownerId,
-    ownerName: item.ownerName,
     revealInfo: false
   });
 });
@@ -375,11 +373,21 @@ app.get('/api/blocks', (req, res) => {
 });
 
 app.post('/api/blocks', (req, res) => {
-  const { userId, blockedUserId, blockedUserName } = req.body;
+  const { userId, itemId } = req.body;
 
-  if (!userId || !blockedUserId) {
+  if (!userId || !itemId) {
     return res.status(400).json({ error: '缺少必要参数' });
   }
+
+  const items = readItems();
+  const item = items.find(i => i.id === itemId);
+
+  if (!item) {
+    return res.status(404).json({ error: '物品不存在' });
+  }
+
+  const blockedUserId = item.ownerId;
+  const blockedUserName = item.ownerName || '匿名用户';
 
   if (userId === blockedUserId) {
     return res.status(400).json({ error: '不能屏蔽自己' });
@@ -399,7 +407,7 @@ app.post('/api/blocks', (req, res) => {
     id: uuidv4(),
     userId,
     blockedUserId,
-    blockedUserName: blockedUserName || '匿名用户',
+    blockedUserName,
     createdAt: new Date().toISOString()
   };
 

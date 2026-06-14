@@ -46,8 +46,8 @@ export function getBlocks(userId) {
   return api.get('/blocks', { params: { userId } }).then(res => res.data)
 }
 
-export function blockUser(userId, blockedUserId, blockedUserName) {
-  return api.post('/blocks', { userId, blockedUserId, blockedUserName }).then(res => res.data)
+export function blockUser(userId, itemId) {
+  return api.post('/blocks', { userId, itemId }).then(res => res.data)
 }
 
 export function unblockUser(userId, blockedUserId) {
